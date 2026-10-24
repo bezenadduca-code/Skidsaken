@@ -124,18 +124,50 @@ local function newLibrary()
 	if not lib then error("Obsidian returned nil") end
 	return lib
 end
-local function applyTheme(L)
+local DEFAULT_THEME = "Purple Pink"
+local THEME_ORDER = { "Purple Pink", "Obsidian Default", "Crimson", "Ocean", "Mint", "Sunset", "Midnight" }
+local THEMES = {
+	["Purple Pink"] = {
+		BackgroundColor = Color3.fromRGB(20, 10, 32), MainColor = Color3.fromRGB(34, 18, 52),
+		AccentColor = Color3.fromRGB(240, 80, 200), OutlineColor = Color3.fromRGB(96, 46, 138),
+		FontColor = Color3.fromRGB(252, 238, 255), DarkColor = Color3.fromRGB(10, 5, 18),
+	},
+	["Obsidian Default"] = {
+		BackgroundColor = Color3.fromRGB(15, 15, 15), MainColor = Color3.fromRGB(25, 25, 25),
+		AccentColor = Color3.fromRGB(125, 85, 255), OutlineColor = Color3.fromRGB(40, 40, 40),
+		FontColor = Color3.fromRGB(255, 255, 255), DarkColor = Color3.fromRGB(0, 0, 0),
+	},
+	["Crimson"] = {
+		BackgroundColor = Color3.fromRGB(18, 8, 10), MainColor = Color3.fromRGB(32, 14, 18),
+		AccentColor = Color3.fromRGB(220, 38, 60), OutlineColor = Color3.fromRGB(80, 30, 38),
+		FontColor = Color3.fromRGB(255, 235, 238), DarkColor = Color3.fromRGB(8, 3, 4),
+	},
+	["Ocean"] = {
+		BackgroundColor = Color3.fromRGB(8, 16, 26), MainColor = Color3.fromRGB(14, 28, 44),
+		AccentColor = Color3.fromRGB(56, 189, 248), OutlineColor = Color3.fromRGB(30, 64, 96),
+		FontColor = Color3.fromRGB(230, 245, 255), DarkColor = Color3.fromRGB(4, 8, 14),
+	},
+	["Mint"] = {
+		BackgroundColor = Color3.fromRGB(10, 22, 18), MainColor = Color3.fromRGB(16, 36, 30),
+		AccentColor = Color3.fromRGB(52, 211, 153), OutlineColor = Color3.fromRGB(30, 84, 68),
+		FontColor = Color3.fromRGB(232, 255, 246), DarkColor = Color3.fromRGB(5, 12, 10),
+	},
+	["Sunset"] = {
+		BackgroundColor = Color3.fromRGB(26, 12, 12), MainColor = Color3.fromRGB(44, 20, 18),
+		AccentColor = Color3.fromRGB(251, 146, 60), OutlineColor = Color3.fromRGB(110, 52, 40),
+		FontColor = Color3.fromRGB(255, 243, 232), DarkColor = Color3.fromRGB(14, 6, 6),
+	},
+	["Midnight"] = {
+		BackgroundColor = Color3.fromRGB(6, 6, 14), MainColor = Color3.fromRGB(12, 12, 26),
+		AccentColor = Color3.fromRGB(129, 140, 248), OutlineColor = Color3.fromRGB(40, 40, 90),
+		FontColor = Color3.fromRGB(238, 240, 255), DarkColor = Color3.fromRGB(3, 3, 8),
+	},
+}
+local function applyTheme(L, name)
 	local sc = L.Scheme
-	if type(sc) ~= "table" then return end
-	local colors = {
-		BackgroundColor = Color3.fromRGB(20, 10, 32),
-		MainColor = Color3.fromRGB(34, 18, 52),
-		AccentColor = Color3.fromRGB(240, 80, 200),
-		OutlineColor = Color3.fromRGB(96, 46, 138),
-		FontColor = Color3.fromRGB(252, 238, 255),
-		DarkColor = Color3.fromRGB(10, 5, 18),
-	}
-	for k, v in pairs(colors) do sc[k] = v end
+	local th = THEMES[name or DEFAULT_THEME]
+	if type(sc) ~= "table" or not th then return end
+	for k, v in pairs(th) do sc[k] = v end
 end
 local function keyOk(k)
 	k = tostring(k or ""):gsub("^%s+", ""):gsub("%s+$", "")
@@ -206,7 +238,7 @@ local Window = Library:CreateWindow({
 	Title = "Skidsaken",
 	Footer = "By: Yvonne/luna",
 	Icon = ICON_ID,
-	Size = UDim2.fromOffset(640, 460),
+	Size = UDim2.fromOffset(560, 400),
 	Center = true,
 	AutoShow = true,
 	ToggleKeybind = Enum.KeyCode.L,
@@ -459,6 +491,21 @@ function ui:Notify(o)
 	end)
 end
 function ui:SetFont() end
+local function refreshTheme()
+	pcall(function() Library:UpdateColorsUsingRegistry() end)
+end
+function ui:ThemeList() return THEME_ORDER end
+function ui:GetThemeColors(name) return THEMES[name] end
+function ui:SetTheme(name)
+	applyTheme(Library, name)
+	refreshTheme()
+end
+function ui:SetAccent(c)
+	if type(Library.Scheme) == "table" then Library.Scheme.AccentColor = c end
+	refreshTheme()
+end
+function ui:SetScale(pct) pcall(function() Library:SetDPIScale(pct) end) end
+function ui:SetNotifySide(side) pcall(function() Library:SetNotifySide(side) end) end
 v1prConfig = Config
 end
 local function getTeamFolder(name)
@@ -2814,45 +2861,19 @@ local jd_axeLocked = false
 local jd_killerMotionData = {}
 local jd_instaThrow = false
 local jd_instaThrowConn = nil
-local jd_instaArmed = true
-local jd_instaLastFire = 0
-local function jd_chargeIsFull()
-local pg = jd_lp:FindFirstChild("PlayerGui")
-local tempUI = pg and pg:FindFirstChild("TemporaryUI")
-local chargeUI = tempUI and tempUI:FindFirstChild("ChargeUI")
-local bar = chargeUI and chargeUI:FindFirstChild("Bar")
-if not bar then return nil end
-local percent = bar:FindFirstChild("Percent")
-if percent and percent:IsA("TextLabel") then
-local n = tonumber(percent.Text:match("%d+"))
-if n then return n >= 100 end
-end
-if bar:IsA("GuiObject") then return bar.Size.X.Scale >= 0.995 end
-return nil
-end
-local function jd_fireAxeThrow()
-local rem = jd_RemoteEvent
-if not rem then return false end
-local ok = pcall(function()
-rem:FireServer("UseActorAbility", {[1] = buffer.fromstring("\3\3\0\0\0Axe")})
-end)
-return ok
+local function jd_getJaneActor()
+local ok, actors = pcall(function() return require(jd_RS.Modules.Gameplay.Actors) end)
+if not ok or not actors then return nil end
+return actors.CurrentActors and actors.CurrentActors[jd_lp]
 end
 local function jd_instaThrowStart()
 if jd_instaThrowConn then jd_instaThrowConn:Disconnect(); jd_instaThrowConn = nil end
-jd_instaArmed = true
 jd_instaThrowConn = jd_Run.Heartbeat:Connect(function()
-if not jd_instaThrow or jd_unloaded then return end
-local ok, full = pcall(jd_chargeIsFull)
-if not ok or full == nil then jd_instaArmed = true; return end
-if full then
-if jd_instaArmed and tick() - jd_instaLastFire > 0.4 then
-jd_instaArmed = false
-jd_instaLastFire = tick()
-jd_fireAxeThrow()
-end
-else
-jd_instaArmed = true
+if not jd_instaThrow then return end
+local actor = jd_getJaneActor()
+if not actor or not actor.State then return end
+if actor.State.IsCrystalEquipped == true then
+actor.State.CrystalFullChargeTime = os.clock() - 999
 end
 end)
 end
@@ -3065,10 +3086,10 @@ jd_applyPatch(actor)
 end
 end
 })
-local sec_024b = tabJaneDoe:Section({ Title = "Auto Axe Throw", Opened = true })
+local sec_024b = tabJaneDoe:Section({ Title = "Crystal Auto Throw", Opened = true })
 sec_024b:Toggle({
-Title = "Throw Axe at 100%",
-Desc  = "When the game's charge bar reaches 100%, the script fires the Axe throw.",
+Title = "Enable Crystal Auto Throw",
+Desc  = "Equip the crystal and it auto charges to 100%, so the crystal throws at full power right away.",
 Flag  = "jdInstaThrow",
 Default = false,
 Type  = "Checkbox",
@@ -3080,10 +3101,9 @@ end)
 end
 })
 sec_024b:Paragraph({
-Title = "How it works",
-Desc  = "Watches the game's own charge bar (the ChargeUI percent). The moment it reads 100% the "
-.. "Axe throw is fired once, then it waits for the bar to reset before it can fire again. "
-.. "Nothing is forced on the game, the bar fills normally."
+Title = "Info",
+Desc  = "While the crystal is equipped, the charge timer is set far in the past every frame, "
+.. "so the game sees a full charge right away and releases the throw at max power."
 })
 local sec_025 = tabJaneDoe:Section({ Title = "Axe Lock-On", Opened = true })
 sec_025:Toggle({
@@ -7367,6 +7387,60 @@ if win and win.Flags then applyConfigFromFlags() else print("[skidsaken] win.Fla
 end)
 end)
 end)
+local tabThemes = win:Tab({ Title = "Themes", Icon = "palette" })
+local secThemePreset = tabThemes:Section({ Title = "Theme", Opened = true })
+local themeSyncing = false
+local accentR, accentG, accentB
+local presetDD
+local function accentFromSliders()
+if themeSyncing or not (accentR and accentG and accentB) then return end
+ui:SetAccent(Color3.fromRGB(math.floor(accentR.Value), math.floor(accentG.Value), math.floor(accentB.Value)))
+end
+presetDD = secThemePreset:Dropdown({
+Title = "Preset",
+Flag = "themePreset",
+Values = ui:ThemeList(),
+Value = "Purple Pink",
+Callback = function(name)
+ui:SetTheme(name)
+local cols = ui:GetThemeColors(name)
+if cols and accentR and accentG and accentB then
+local c = cols.AccentColor
+themeSyncing = true
+pcall(function()
+accentR:SetValue(math.floor(c.R * 255 + 0.5))
+accentG:SetValue(math.floor(c.G * 255 + 0.5))
+accentB:SetValue(math.floor(c.B * 255 + 0.5))
+end)
+themeSyncing = false
+end
+end
+})
+secThemePreset:Button({
+Title = "Reset to Purple Pink",
+Callback = function()
+pcall(function() presetDD:SetValue("Purple Pink") end)
+end
+})
+local secThemeAccent = tabThemes:Section({ Title = "Accent Color", Opened = true })
+accentR = secThemeAccent:Slider({ Title = "Red", Step = 1, Value = { Min = 0, Max = 255, Default = 240 }, Callback = accentFromSliders })
+accentG = secThemeAccent:Slider({ Title = "Green", Step = 1, Value = { Min = 0, Max = 255, Default = 80 }, Callback = accentFromSliders })
+accentB = secThemeAccent:Slider({ Title = "Blue", Step = 1, Value = { Min = 0, Max = 255, Default = 200 }, Callback = accentFromSliders })
+local secThemeMenu = tabThemes:Section({ Title = "Menu", Opened = true })
+secThemeMenu:Slider({
+Title = "Menu Scale (%)",
+Flag = "uiScale",
+Step = 5,
+Value = { Min = 70, Max = 130, Default = 100 },
+Callback = function(v) ui:SetScale(v) end
+})
+secThemeMenu:Dropdown({
+Title = "Notification Side",
+Flag = "notifySide",
+Values = { "Right", "Left" },
+Value = "Right",
+Callback = function(v) ui:SetNotifySide(v) end
+})
 ui:Notify({ Title = "Skidsaken", Content = "Loaded. Press L to show/hide the menu.", Duration = 4 })
 print("[skidsaken] Loaded successfully")
 end)
